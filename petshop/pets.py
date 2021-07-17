@@ -9,37 +9,58 @@ from . import db
 bp = Blueprint("pets", "pets", url_prefix="")
 
 def format_date(d):
-    if d:
-        d = datetime.datetime.strptime(d, '%Y-%m-%d')
-        v = d.strftime("%a - %b %d, %Y")
-        return v
-    else:
-        return None
+  if d:
+    d = datetime.datetime.strptime(d, '%Y-%m-%d')
+    v = d.strftime("%a - %b %d, %Y")
+    return v
+  else:
+    return None
 
 @bp.route("/search/<field>/<value>")
 def search(field, value):
     conn = db.get_db()
     cursor = conn.cursor()
-    oby = request.args.get("order_by", "id") 
-    order = request.args.get("order", "asc")
-    if order == "asc":
-        cursor.execute(f"select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s where p.species = s.id and exists(select 1 from tags_pets where pet=p.id and tag=(select id from tag where name = ?)) order by p.{oby}",[value])
-    else:
-        cursor.execute(f"select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s where p.species = s.id and exists(select 1 from tags_pets where pet=p.id and tag=(select id from tag where name = ?)) order by p.{oby} desc",[value])
+    cursor.execute("""select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s, tags_pets tp, tag t  where t.name = ? and tp.tag = t.id and p.species = s.id and tp.pet = p.id order by p.id""", [value])
     pets = cursor.fetchall()
-    return render_template('search.html', pets = pets, field=field,value=value, order="desc" if order=="asc" else "asc")
+    return render_template("search.html", pets=pets)
 
 @bp.route("/")
 def dashboard():
+    oby = ["id", "name", "bought", "sold", "species"]
     conn = db.get_db()
     cursor = conn.cursor()
-    oby = request.args.get("order_by", "id") #used in serach feature. 
-    order = request.args.get("order", "asc")
-    if order == "asc":
+    if oby[0] == request.args.get("order_by", "id"): # Sorting by all columns done
+      order = request.args.get("order", "asc")
+      if order == "asc":
         cursor.execute(f"select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s where p.species = s.id order by p.id")
-    else:
+      else:
         cursor.execute(f"select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s where p.species = s.id order by p.id desc")
+    elif oby[1] == request.args.get("order_by", "name"):
+      order = request.args.get("order", "asc")
+      if order == "asc":
+        cursor.execute(f"select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s where p.species = s.id order by p.name")
+      else:
+        cursor.execute(f"select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s where p.species = s.id order by p.name desc")
+    elif oby[2] == request.args.get("order_by", "bought"):
+      order = request.args.get("order", "asc")
+      if order == "asc":
+        cursor.execute(f"select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s where p.species = s.id order by p.bought")
+      else:
+        cursor.execute(f"select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s where p.species = s.id order by p.bought desc")
+    elif oby[3] == request.args.get("order_by", "sold"):
+      order = request.args.get("order", "asc")
+      if order == "asc":
+        cursor.execute(f"select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s where p.species = s.id order by p.sold")
+      else:
+        cursor.execute(f"select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s where p.species = s.id order by p.sold desc")
+    elif oby[4] == request.args.get("order_by", "species"):
+      order = request.args.get("order", "asc")
+      if order == "asc":
+        cursor.execute(f"select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s where p.species = s.id order by s.name")
+      else:
+        cursor.execute(f"select p.id, p.name, p.bought, p.sold, s.name from pet p, animal s where p.species = s.id order by s.name desc")
     pets = cursor.fetchall()
+    
     return render_template('index.html', pets = pets, order="desc" if order=="asc" else "asc")
 
 
@@ -58,7 +79,7 @@ def pet_info(pid):
                 name = name,
                 bought = format_date(bought),
                 sold = format_date(sold),
-                description = description, #displayed
+                description = description, #Is displaying now
                 species = species,
                 tags = tags)
     return render_template("petdetail.html", **data)
@@ -76,14 +97,14 @@ def edit(pid):
         data = dict(id = pid,
                     name = name,
                     bought = format_date(bought),
-                    sold = format_date(sold),
+                    sold = sold,
                     description = description,
                     species = species,
                     tags = tags)
         return render_template("editpet.html", **data)
     elif request.method == "POST":
         description = request.form.get('description')
-        sold = request.form.get("sold")
+        sold = request.form.get('sold')
         cursor.execute("""
         update pet
         set description = ?
@@ -101,3 +122,8 @@ def edit(pid):
           where id = ?;""", (sold, pid))
         conn.commit()
         return redirect(url_for("pets.pet_info", pid=pid), 302)
+        
+    
+
+
+
